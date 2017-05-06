@@ -1,6 +1,4 @@
-/* Copyright (c) 2017 Evan Nemerson <evan@nemerson.com>
- *
- * Permission is hereby granted, free of charge, to any person
+/* Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
  * files (the "Software"), to deal in the Software without
  * restriction, including without limitation the rights to use, copy,
@@ -19,6 +17,12 @@
  * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
+ *
+ * Copyright:
+ *   2017      Evan Nemerson <evan@nemerson.com>
+ *   2015-2017 John W. Ratcliff <jratcliffscarab@gmail.com>
+ *   2015      Brandon Rowlett <browlett@nvidia.com>
+ *   2015      Ken Fast <kfast@gdeb.com>
  */
 
 #if !defined(SIMDE__SSE2_H)
@@ -155,6 +159,9 @@ HEDLEY_STATIC_ASSERT(sizeof(__m128i) == sizeof(simde__m128i), "__m128i size does
 HEDLEY_STATIC_ASSERT(sizeof(__m128d) == sizeof(simde__m128d), "__m128d size doesn't match simde__m128d size");
 #define SIMDE__M128I_C(expr) ((simde__m128i) { .n = expr })
 #define SIMDE__M128D_C(expr) ((simde__m128d) { .n = expr })
+#elif defined(SIMDE_SSE_NEON)
+#define SIMDE__M128I_NEON_C(T, expr) (simde__m128i) { .neon_##T = expr }
+#define SIMDE__M128D_NEON_C(T, expr) (simde__m128d) { .neon_##T = expr }
 #endif
 HEDLEY_STATIC_ASSERT(16 == sizeof(simde__m128i), "simde__m128i size incorrect");
 HEDLEY_STATIC_ASSERT(16 == sizeof(simde__m128d), "simde__m128d size incorrect");
@@ -179,6 +186,8 @@ simde__m128i
 simde_mm_add_epi16 (simde__m128i a, simde__m128i b) {
 #if defined(SIMDE_SSE2_NATIVE)
   return SIMDE__M128I_C(_mm_add_epi16(a.n, b.n));
+#elif defined(SIMDE_SSE2_NEON)
+  return SIMDE__M128I_NEON_C(i16, vaddq_s16(a.neon_i16, b.neon_i16));
 #else
   simde__m128i r;
   SIMDE__VECTORIZE
@@ -194,6 +203,8 @@ simde__m128i
 simde_mm_add_epi32 (simde__m128i a, simde__m128i b) {
 #if defined(SIMDE_SSE2_NATIVE)
   return SIMDE__M128I_C(_mm_add_epi32(a.n, b.n));
+#elif defined(SIMDE_SSE2_NEON)
+  return SIMDE__M128I_NEON_C(i32, vaddq_s32(a.neon_i32, b.neon_i32));
 #else
   simde__m128i r;
   SIMDE__VECTORIZE
@@ -351,6 +362,8 @@ simde__m128i
 simde_mm_and_si128 (simde__m128i a, simde__m128i b) {
 #if defined(SIMDE_SSE2_NATIVE)
   return SIMDE__M128I_C(_mm_and_si128(a.n, b.n));
+#elif defined(SIMDE_SSE_NEON)
+  return SIMDE__M128I_NEON_C(i32, vandq_s32(b.neon_i32, a.neon_i32));
 #else
   simde__m128i r;
   SIMDE__VECTORIZE
@@ -381,6 +394,8 @@ simde__m128i
 simde_mm_andnot_si128 (simde__m128i a, simde__m128i b) {
 #if defined(SIMDE_SSE2_NATIVE)
   return SIMDE__M128I_C(_mm_andnot_si128(a.n, b.n));
+#elif defined(SIMDE_SSE2_NEON)
+  return SIMDE__M128I_NEON_C(i32, vbicq_s32(b.neon_i32, a.neon_i32));
 #else
   simde__m128i r;
   SIMDE__VECTORIZE
@@ -557,6 +572,30 @@ int32_t
 simde_mm_movemask_epi8 (simde__m128i a) {
 #if defined(SIMDE_SSE2_NATIVE)
   return _mm_movemask_epi8(a.n);
+#elif defined(SIMDE_SSE2_NEON)
+  uint8x16_t input = a.neon_u8;
+  static const int8_t SIMDE__ALIGN(16) xr[8] = { -7, -6, -5, -4, -3, -2, -1, 0 };
+  uint8x8_t mask_and = vdup_n_u8(0x80);
+  int8x8_t mask_shift = vld1_s8(xr);
+
+  uint8x8_t lo = vget_low_u8(input);
+  uint8x8_t hi = vget_high_u8(input);
+
+  lo = vand_u8(lo, mask_and);
+  lo = vshl_u8(lo, mask_shift);
+
+  hi = vand_u8(hi, mask_and);
+  hi = vshl_u8(hi, mask_shift);
+
+  lo = vpadd_u8(lo, lo);
+  lo = vpadd_u8(lo, lo);
+  lo = vpadd_u8(lo, lo);
+
+  hi = vpadd_u8(hi, hi);
+  hi = vpadd_u8(hi, hi);
+  hi = vpadd_u8(hi, hi);
+
+  return ((hi[0] << 8) | (lo[0] & 0xFF));
 #else
   int32_t r = 0;
   SIMDE__VECTORIZE_REDUCTION(|:r)
@@ -572,6 +611,8 @@ simde__m128i
 simde_mm_or_si128 (simde__m128i a, simde__m128i b) {
 #if defined(SIMDE_SSE2_NATIVE)
   return SIMDE__M128I_C(_mm_or_si128(a.n, b.n));
+#elif defined(SIMDE_SSE2_NEON)
+  return SIMDE__M128I_NEON_C(i32, vorrq_s32(a.neon_i32, b.neon_i32));
 #else
   simde__m128i r;
   SIMDE__VECTORIZE
@@ -613,6 +654,9 @@ simde__m128i
 simde_mm_set_epi32 (int32_t e3, int32_t e2, int32_t e1, int32_t e0) {
 #if defined(SIMDE_SSE2_NATIVE)
   return SIMDE__M128I_C(_mm_set_epi32(e3, e2, e1, e0));
+#elif defined(SIMDE_SSE2_NEON)
+  int32_t SIMDE__ALIGN(16) data[4] = { e0, e1, e2, e3 };
+  return SIMDE__M128I_NEON_C(i32, vld1q_s32(data));
 #else
   return (simde__m128i) { .i32 = { e0, e1, e2, e3 } };
 #endif
@@ -719,6 +763,8 @@ simde__m128i
 simde_mm_set1_epi32 (int32_t a) {
 #if defined(SIMDE_SSE2_NATIVE)
   return SIMDE__M128I_C(_mm_set1_epi32(a));
+#elif defined(SIMDE_SSE2_NEON)
+  return SIMDE__M128I_NEON_C(i32, vdupq_n_s32(a));
 #else
   return (simde__m128i) { .i32 = { a, a, a, a } };
 #endif
@@ -825,6 +871,8 @@ simde__m128i
 simde_mm_setzero_si128 (void) {
 #if defined(SIMDE_SSE2_NATIVE)
   return SIMDE__M128I_C(_mm_setzero_si128());
+#elif defined(SIMDE_SSE2_NEON)
+  return SIMDE__M128I_NEON_C(i32, vdupq_n_s32(0));
 #else
   return (simde__m128i) { .i64 = { 0, } };
 #endif
@@ -898,6 +946,8 @@ simde__m128i
 simde_mm_xor_si128 (simde__m128i a, simde__m128i b) {
 #if defined(SIMDE_SSE2_NATIVE)
   return SIMDE__M128I_C(_mm_xor_si128(a.n, b.n));
+#elif defined(SIMDE_SSE2_NEON)
+  return SIMDE__M128I_NEON_C(i32, veorq_s32(a.neon_i32, b.neon_i32));
 #else
   simde__m128i r;
   SIMDE__VECTORIZE

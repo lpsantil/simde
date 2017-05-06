@@ -2202,7 +2202,7 @@ test_simde_mm_div_ps(const MunitParameter params[], void* data) {
 
     r = simde_mm_div_ps(a, b);
 
-    assert_m128_ps(r, ==, x);
+    simde_assert_m128_f32_equal(r, x, 1);
   }
 
   return MUNIT_OK;
@@ -2224,7 +2224,7 @@ test_simde_mm_div_ss(const MunitParameter params[], void* data) {
 
     r = simde_mm_div_ss(a, b);
 
-    assert_m128_ps(r, ==, x);
+    simde_assert_m128_f32_equal(r, x, 2);
   }
 
   return MUNIT_OK;
